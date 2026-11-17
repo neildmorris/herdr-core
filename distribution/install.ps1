@@ -1,6 +1,6 @@
 # Installs herdr-core (hc) on Windows, or updates it:
 #
-#   powershell -c "irm https://releases.herdr.dev/core/install.ps1 | iex"
+#   powershell -c "irm https://raw.githubusercontent.com/neildmorris/herdr-core/channel/core/install.ps1 | iex"
 #
 # Into %LOCALAPPDATA%\Programs\herdr-core (herdr-core.exe, Microsoft's
 # ConPTY beside it), added to your PATH, with hc.exe linked to it only if no
@@ -23,7 +23,7 @@ $ProgressPreference = "SilentlyContinue"
 # throw, not exit: under `irm | iex`, exit would close the person's window.
 function Fail($why) { throw "hc: $why" }
 
-$releases = if ($env:HERDR_RELEASES_URL) { $env:HERDR_RELEASES_URL.TrimEnd("/") } else { "https://releases.herdr.dev" }
+$releases = if ($env:HERDR_RELEASES_URL) { $env:HERDR_RELEASES_URL.TrimEnd("/") } else { "https://raw.githubusercontent.com/neildmorris/herdr-core/channel" }
 $dir = if ($env:HC_INSTALL_DIR) { $env:HC_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\herdr-core" }
 $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
 if ($arch -ne "AMD64") { Fail "no build for $arch Windows yet (x64 only)" }

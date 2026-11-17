@@ -137,6 +137,10 @@ fn a_wait_prints_what_happened() {
 fn older_compares_versions_as_numbers() {
     assert!(older("hc 0.1.9", "hc 0.2.0") && older("hc 0.2.0", "hc 0.10.0"));
     assert!(!older("hc 0.2.0", "hc 0.2.0") && !older("hc 0.10.0", "hc 0.9.9") && !older("hc dev", "hc 0.2.0"));
+    // This fork's builds: by upstream version, then mesh number; upstream's is mesh 0.
+    assert!(older("hc 0.2.0-mesh.1", "hc 0.2.0-mesh.2") && older("hc 0.2.0", "hc 0.2.0-mesh.1"));
+    assert!(older("hc 0.2.0-mesh.9", "hc 0.2.1") && !older("hc 0.2.0-mesh.10", "hc 0.2.0-mesh.9"));
+    assert!(release_version("0.2.0-mesh.3").is_ok() && release_version("0.2.0-mesh.x").is_err());
 }
 
 #[test]

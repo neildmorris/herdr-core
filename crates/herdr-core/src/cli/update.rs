@@ -9,21 +9,29 @@ pub(super) fn version_of(path: &std::path::Path) -> Option<String> {
     (out.status.success() && v.starts_with("hc ")).then_some(v)
 }
 
-/// A release name for `--version`: `0.1.4` (it goes into a URL).
+/// A release name for `--version`: `0.1.4`, or this fork's `0.1.4-mesh.2`
+/// (it goes into a URL).
 pub(super) fn release_version(s: &str) -> Result<String, String> {
-    let parts: Vec<&str> = s.split('.').collect();
+    let (release, mesh) = s.split_once("-mesh.").unwrap_or((s, "0"));
+    let parts: Vec<&str> = release.split('.').collect();
     let number = |p: &&str| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit());
-    if parts.len() == 3 && parts.iter().all(number) {
+    if parts.len() == 3 && parts.iter().chain([&mesh]).all(number) {
         Ok(s.into())
     } else {
-        Err(format!("expected a release like 0.1.4, got {s:?}"))
+        Err(format!("expected a release like 0.1.4 or 0.1.4-mesh.2, got {s:?}"))
     }
 }
 
-/// `hc 0.1.9` is older than `hc 0.2.0`; anything unparsed is not older.
+/// `hc 0.1.9` is older than `hc 0.2.0`, and this fork's `hc 0.2.0-mesh.1`
+/// older than `hc 0.2.0-mesh.2`; upstream's `hc 0.2.0` counts as `-mesh.0`.
+/// Anything unparsed is not older.
 pub(super) fn older(a: &str, b: &str) -> bool {
     let parts = |v: &str| -> Option<Vec<u64>> {
-        v.strip_prefix("hc ")?.split(['.', '-']).take(3).map(|p| p.parse().ok()).collect()
+        let v = v.strip_prefix("hc ")?;
+        let (release, mesh) = v.split_once("-mesh.").unwrap_or((v, "0"));
+        let mut n: Vec<u64> = release.split(['.', '-']).take(3).map(|p| p.parse().ok()).collect::<Option<_>>()?;
+        n.push(mesh.parse().ok()?);
+        Some(n)
     };
     matches!((parts(a), parts(b)), (Some(a), Some(b)) if a < b)
 }

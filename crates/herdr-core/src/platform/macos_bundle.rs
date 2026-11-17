@@ -34,12 +34,10 @@ pub fn verify(path: &Path, local: bool) -> io::Result<()> {
     if verify(REQUIREMENT).is_ok() {
         return Ok(());
     }
-    // Explicit local builds can be ad-hoc, but another team's signature is never ours.
-    if local {
-        let out = Command::new("/usr/bin/codesign").arg("-dv").arg(path).output()?;
-        if String::from_utf8_lossy(&out.stderr).lines().any(|line| line == "Signature=adhoc") {
-            return verify("=identifier \"dev.herdr.core\"");
-        }
+    // Local builds and other channels (a fork's) are trusted as they are: an
+    // ad-hoc signature or their own team's, with our identifier.
+    if local && verify("=identifier \"dev.herdr.core\"").is_ok() {
+        return Ok(());
     }
     Err(io::Error::other("expected Herdr's Developer ID signature (dev.herdr.core, team 2W9652Q7QR)"))
 }

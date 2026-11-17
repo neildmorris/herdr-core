@@ -1,4 +1,4 @@
-//! Released builds on releases.herdr.dev: the list (`core/latest.json`, or
+//! Released builds on this build's release channel: the list (`core/latest.json`, or
 //! `core/<version>/manifest.json` for one version) and its checked
 //! downloads. curl, sha256sum/shasum (Windows: its own crypto) and tar do
 //! the work: no HTTP or crypto code in hc for something run this rarely.
@@ -22,15 +22,32 @@ pub struct Target {
     pub sha256: String,
 }
 
-fn base() -> String {
-    std::env::var("HERDR_RELEASES_URL")
-        .unwrap_or_else(|_| "https://releases.herdr.dev".into())
-        .trim_end_matches('/')
-        .into()
+/// Upstream's release service: its macOS builds carry Herdr's Developer ID.
+pub const UPSTREAM: &str = "https://releases.herdr.dev";
+
+/// Where this build's releases are, chosen at build time (`HC_RELEASES_URL`)
+/// so a fork's builds update from the fork's channel, not upstream's.
+pub const CHANNEL: &str = match option_env!("HC_RELEASES_URL") {
+    Some(url) => url,
+    None => "https://raw.githubusercontent.com/neildmorris/herdr-core/channel",
+};
+
+/// The channel in use: `HERDR_RELEASES_URL` at run time, else this build's.
+pub fn base() -> String {
+    channel(std::env::var("HERDR_RELEASES_URL").ok())
+}
+
+fn channel(over: Option<String>) -> String {
+    over.as_deref().unwrap_or(CHANNEL).trim_end_matches('/').into()
+}
+
+/// Whether the channel in use is upstream's.
+pub fn upstream() -> bool {
+    base() == UPSTREAM
 }
 
 fn unavailable(why: String) -> RpcError {
-    RpcError::new("unavailable", why, "check your connection; the releases are at releases.herdr.dev")
+    RpcError::new("unavailable", why, format!("check your connection; the releases are at {}", base()))
 }
 
 fn curl(url: &str, to: &Path) -> Result<(), RpcError> {
@@ -145,4 +162,14 @@ impl Drop for Scratch {
 /// This machine as release targets name it: `linux-x86_64`, `macos-aarch64`.
 pub fn this_target() -> String {
     format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_channel_is_this_builds_unless_overridden() {
+        assert_eq!(super::channel(None), super::CHANNEL.trim_end_matches('/'));
+        assert_ne!(super::CHANNEL, super::UPSTREAM, "a fork's builds must not update from upstream");
+        assert_eq!(super::channel(Some("https://mirror.example/".into())), "https://mirror.example");
+    }
 }

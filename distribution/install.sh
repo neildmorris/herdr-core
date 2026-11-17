@@ -1,16 +1,18 @@
 #!/bin/sh
 # Installs herdr-core (hc), or updates it:
 #
-#   curl -fsSL https://releases.herdr.dev/core/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/neildmorris/herdr-core/channel/core/install.sh | sh
 #
 # Into ~/.local/bin/herdr-core, with `hc` beside it only if no `hc` exists
 # (some window managers ship one). An hc that is already there is swapped
 # the planned way (hc update --from): running terminals keep running. One
 # from a package manager is left to it. HC_VERSION=0.2.0 picks a version;
-# HERDR_RELEASES_URL points elsewhere (tests).
+# HERDR_RELEASES_URL points elsewhere (tests, or upstream's
+# https://releases.herdr.dev). A fork's release workflow publishes this file
+# with its own channel as the default.
 set -eu
 
-releases=${HERDR_RELEASES_URL:-https://releases.herdr.dev}
+releases=${HERDR_RELEASES_URL:-https://raw.githubusercontent.com/neildmorris/herdr-core/channel}
 bin=${HC_INSTALL_DIR:-$HOME/.local/bin}
 
 say() { printf '%s\n' "$*"; }
