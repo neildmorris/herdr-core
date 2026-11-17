@@ -1,0 +1,27 @@
+{
+  "version": "0.1.21-mesh.1",
+  "generation": 1,
+  "notes": "herdr-core 0.1.21-mesh.1",
+  "targets": {
+    "linux-aarch64": {
+      "url": "https://github.com/neildmorris/herdr-core/releases/download/v0.1.21-mesh.1/herdr-core-linux-aarch64.tar.gz",
+      "sha256": "a6cdd0d9502ecc6d3679fcc7c6013c76e332225d6b7c150dc29600fe788672c9"
+    },
+    "linux-x86_64": {
+      "url": "https://github.com/neildmorris/herdr-core/releases/download/v0.1.21-mesh.1/herdr-core-linux-x86_64.tar.gz",
+      "sha256": "8d299a563aa9974dd34d103a1e0ad32b05f5a5e58e24a93a7016d18f24645cbe"
+    },
+    "macos-aarch64": {
+      "url": "https://github.com/neildmorris/herdr-core/releases/download/v0.1.21-mesh.1/herdr-core-macos-aarch64.tar.gz",
+      "sha256": "2da379b8ddab048f8b65066a025149274548234913a40c25de62a2ed9b70181e"
+    },
+    "macos-x86_64": {
+      "url": "https://github.com/neildmorris/herdr-core/releases/download/v0.1.21-mesh.1/herdr-core-macos-x86_64.tar.gz",
+      "sha256": "70d2821361091315108c6918bec7cd5c646de23424be0ab8228e8203221762f6"
+    },
+    "windows-x86_64": {
+      "url": "https://github.com/neildmorris/herdr-core/releases/download/v0.1.21-mesh.1/herdr-core-windows-x86_64.zip",
+      "sha256": "89b00c918bd480e1c4a020dac2a31cc22af2eb2268709af9af760f99fd86725a"
+    }
+  }
+}
