@@ -95,3 +95,38 @@ fn spark_found(list: &Value) -> Vec<(String, String, String)> {
     let s = |f: &Value, k: &str| f[k].as_str().unwrap_or_default().to_string();
     list["found"].as_array().into_iter().flatten().map(|f| (s(f, "machine"), s(f, "kind"), s(f, "name"))).collect()
 }
+
+#[test]
+fn two_hubs_for_each_other_list_every_core_once_and_promptly() {
+    let ops = Session::new();
+    let mut spark = Session::new();
+    let mut hub = Session::new();
+    // spark's core starts with its own ssh first, so it can dial out too.
+    spark.env.push(fake_ssh(&spark, &[("mainhub", &hub), ("ops", &ops)]));
+    spark.env.push(("HC_RECONNECT_MS".into(), "200".into()));
+    spark.json(&["server", "status"]);
+    hub.env.push(fake_ssh(&hub, &[("spark", &spark), ("ops", &ops)]));
+    hub.env.push(("HC_RECONNECT_MS".into(), "200".into()));
+    hub.json(&["machine", "add", "spark", "--mesh"]);
+    hub.json(&["machine", "add", "ops", "--mesh"]);
+    // The always-on box is a hub too: it adds the first hub and ops, both meshed.
+    spark.json(&["machine", "add", "mainhub", "--name", "mac", "--mesh"]);
+    spark.json(&["machine", "add", "ops", "--mesh"]);
+    let on_hub = run(&hub, &["--name", "h", "sh"]);
+    let on_ops = run(&ops, &["--name", "o", "sh"]);
+    let on_spark = run(&spark, &["--name", "s", "sh"]);
+    // ops has two hubs: it lists through both, each core once.
+    wait_until("ops hears both hubs", || addresses(&ops.json(&["ls"])).len() == 3);
+
+    for (who, s) in [("hub", &hub), ("spark", &spark), ("ops", &ops)] {
+        let started = std::time::Instant::now();
+        let seen = addresses(&s.json(&["ls"]));
+        assert!(started.elapsed() < std::time::Duration::from_secs(8), "{who} listed in {:?}", started.elapsed());
+        // Each core's terminal exactly once, whatever it is called here.
+        for t in [&on_hub, &on_ops, &on_spark] {
+            let copies = seen.iter().filter(|a| a.rsplit('/').next() == Some(t.as_str())).count();
+            assert!(copies >= 1, "{who} misses {t}: {seen:?}");
+        }
+        assert_eq!(seen.len(), 3, "{who} lists each core once: {seen:?}");
+    }
+}

@@ -9,6 +9,12 @@ use crate::runtime::{Core, State};
 use serde_json::Value;
 use std::sync::Arc;
 
+tokio::task_local! {
+    /// Set while serving a mesh machine's call: a list made for it never asks
+    /// this core's own hubs (two cores that are each other's hub would loop).
+    pub static MESH_CALL: bool;
+}
+
 /// What a mesh machine may not ask of its hub: changing the hub itself or its
 /// machines, and the streams a relayed call can't carry yet.
 pub(super) const NOT_OVER_MESH: &[&str] = &[
@@ -53,7 +59,7 @@ pub(super) async fn from_mesh(
         Some((to, params)) => forward_to(core, &to, method, params).await,
         None => {
             let call = crate::api::Call { core, conn: None, plain: None };
-            crate::api::dispatch(&call, method, params).await
+            MESH_CALL.scope(true, crate::api::dispatch(&call, method, params)).await
         }
     }
 }

@@ -41,41 +41,64 @@ pub(super) struct FromHubs {
 }
 
 /// Each mesh hub's list, as this core names things: the hub's own terminals
-/// as `hub/t7`, its machines' as they are, ours (it lists them too) left out.
+/// as `hub/t7`, its machines' as they are. A core is listed once, by its id:
+/// this core and the machines added here come from their own lines, and a core
+/// two hubs reach comes from the first hub only.
 pub(super) async fn from_hubs(core: &Arc<Core>, p: &ListParams) -> FromHubs {
     let mut out = FromHubs { terminals: Vec::new(), hidden_finished: 0, mesh: Vec::new(), found: Vec::new() };
+    let mut seen: std::collections::HashSet<String> = {
+        let st = core.lock();
+        std::iter::once(core.info.id.clone()).chain(st.machines.iter().map(|m| m.id.clone())).collect()
+    };
     let asks: Vec<_> = crate::remote::hubs(core)
         .into_iter()
         .map(|(id, name)| {
             let (core, params) = (core.clone(), serde_json::to_value(p).unwrap_or_default());
-            let to = crate::remote::To::Peer { id, name: name.clone() };
+            let to = crate::remote::To::Peer { id: id.clone(), name: name.clone() };
             // The hub asks its machines first (3 s each, side by side).
             let ask = async move { crate::remote::forward_to(&core, &to, "terminal.list", params).await };
-            (name, tokio::spawn(async move { tokio::time::timeout(Duration::from_secs(6), ask).await }))
+            (id, name, tokio::spawn(async move { tokio::time::timeout(Duration::from_secs(6), ask).await }))
         })
         .collect();
-    for (hub, ask) in asks {
+    for (hub_id, hub, ask) in asks {
+        if seen.contains(&hub_id) {
+            continue; // added here too, or reached through an earlier hub
+        }
         let Ok(Ok(Ok(r))) = ask.await else {
             out.mesh.push(MeshMachine { name: hub, state: "unreachable".into(), via: None });
             continue;
         };
-        let calls_me = core.lock().peers.values().find(|peer| peer.name == hub).map(|peer| peer.calls_me.clone());
-        let theirs = |address: &str| address.contains('/');
+        // Which core each name in this hub's reply is: its own, then its machines.
+        let ids: std::collections::HashMap<String, String> = std::iter::once((hub.clone(), hub_id.clone()))
+            .chain(
+                r["machines"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|m| Some((m["name"].as_str()?.to_string(), m["id"].as_str()?.to_string()))),
+            )
+            .collect();
+        let new: std::collections::HashSet<&String> = ids.values().filter(|id| !seen.contains(*id)).collect();
+        let fresh = |name: &str| ids.get(name).is_some_and(|id| new.contains(id));
         out.terminals.extend(
             r["terminals"]
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter(|t| t["address"].as_str().is_some_and(theirs))
+                .filter(|t| t["address"].as_str().and_then(|a| a.split_once('/')).is_some_and(|(m, _)| fresh(m)))
                 .cloned(),
         );
         out.hidden_finished += r["hidden_finished"].as_u64().unwrap_or(0) as usize;
-        out.found.extend(found_on(&hub, &r["found"]).into_iter().filter(|f| Some(&f.machine) != calls_me.as_ref()));
+        out.found.extend(found_on(&hub, &r["found"]).into_iter().filter(|f| fresh(&f.machine)));
         out.mesh.push(MeshMachine { name: hub.clone(), state: "connected".into(), via: None });
-        for m in r["machines"].as_array().into_iter().flatten().filter(|m| m["id"] != core.info.id.as_str()) {
+        for m in r["machines"].as_array().into_iter().flatten() {
             let (name, state) = (m["name"].as_str().unwrap_or_default(), m["state"].as_str().unwrap_or_default());
-            out.mesh.push(MeshMachine { name: name.into(), state: state.into(), via: Some(hub.clone()) });
+            if fresh(name) && name != hub {
+                out.mesh.push(MeshMachine { name: name.into(), state: state.into(), via: Some(hub.clone()) });
+            }
         }
+        let added: Vec<String> = new.into_iter().cloned().collect();
+        seen.extend(added);
     }
     out
 }

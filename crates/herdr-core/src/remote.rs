@@ -27,7 +27,7 @@ mod mesh;
 mod put;
 mod run;
 mod viewers;
-pub use mesh::hubs;
+pub use mesh::{MESH_CALL, hubs};
 use mesh::{NOT_OVER_MESH, from_mesh, hub, is_mesh_peer};
 use run::forward_once;
 #[cfg(test)]

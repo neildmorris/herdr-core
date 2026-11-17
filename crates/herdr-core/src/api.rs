@@ -311,7 +311,8 @@ async fn terminal_list(core: Ctx<'_>, p: ListParams) -> Result<ListResult, RpcEr
         .collect();
     // Mesh hubs (never asked from afar: a hub asking back would loop), and
     // what runs outside hc here, alongside.
-    let hubs = (!afar).then(|| {
+    let via_mesh = crate::remote::MESH_CALL.try_with(|v| *v).unwrap_or(false);
+    let hubs = (!afar && !via_mesh).then(|| {
         tokio::spawn({
             let (core, p) = (core.core.clone(), ListParams { all: p.all, labels: p.labels.clone(), found: p.found });
             async move { from_hubs(&core, &p).await }
