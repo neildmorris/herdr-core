@@ -5,18 +5,27 @@ Agents can start other agents, send them work, and hear back; you can attach to 
 
 Core draws nothing. Use it from your shell, an agent, or your own app.
 
+## This fork
+
+This is [neildmorris/herdr-core](https://github.com/neildmorris/herdr-core), a fork of
+[herdrdev/herdr-core](https://github.com/herdrdev/herdr-core) that adds the mesh:
+any machine you add can list and drive the terminals on every other one, through a hub.
+Its builds say `-mesh.N` after the upstream version (`0.1.21-mesh.1`) and install and
+update from this fork's own release channel, not upstream's.
+[Build your own mesh](docs/mesh.md) sets one up across macOS and Linux machines.
+
 ## Install
 
 Linux and macOS:
 
 ```sh
-curl -fsSL https://releases.herdr.dev/core/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/neildmorris/herdr-core/channel/core/install.sh | sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-powershell -c "irm https://releases.herdr.dev/core/install.ps1 | iex"
+powershell -c "irm https://raw.githubusercontent.com/neildmorris/herdr-core/channel/core/install.ps1 | iex"
 ```
 
 Builds are available for Linux and macOS on x86_64 and aarch64, and Windows on x86_64.

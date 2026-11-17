@@ -15,7 +15,7 @@ at startup, after the core's own enable attempt, and about every minute.
 Until the first check finishes, the result is null.
 This reports logout protection, not survival across a reboot.
 
-[Back to the README](../README.md) · [Command reference](commands.md#hc-machine)
+[Back to the README](../README.md) · [Command reference](commands.md#hc-machine) · [Build your own mesh](mesh.md)
 
 ## Add a machine over SSH
 
@@ -159,16 +159,16 @@ By default a machine you add reaches back only to the terminals here that
 started work there. Put it in the mesh to let it use this core as its hub:
 
 ```sh
-hc machine mesh spark          # or: hc machine add spark --mesh
-hc machine mesh spark --off    # back to the default
+hc machine mesh gpu            # or: hc machine add gpu --mesh
+hc machine mesh gpu --off      # back to the default
 ```
 
 The machine hears at its next hello (hc dials it again at once). From there:
 
 ```sh
-hc ls                          # its own, the hub's (neil/t7), and the hub's machines' (ops/t3)
-hc read ops/t3 --lines 100     # through the hub; no ssh from spark to ops needed
-hc send neil/t7 "review the diff on ops"
+hc ls                          # its own, the hub's (hub/t7), and the hub's machines' (ops/t3)
+hc read ops/t3 --lines 100     # through the hub; no ssh from gpu to ops needed
+hc send hub/t7 "review the diff on ops"
 hc run --bg --on ops --cwd /srv/app cargo test
 ```
 
@@ -180,6 +180,8 @@ machine cannot add, remove or rename the hub's machines or stop its core.
 
 The mesh is trust: a machine in it can type into every terminal the hub
 reaches. Leave out machines that belong to someone else.
+[Build your own mesh](mesh.md) walks through setting one up across machines,
+with topologies, the trust model and troubleshooting.
 
 ### What runs outside hc
 
@@ -193,9 +195,8 @@ discover = ["~/.config/herdr-core/hc-discover.py"]
 
 The command prints a JSON array of `{kind, name, status, pid, cwd, detail}`
 within 5 s. [`contrib/discover/hc-discover.py`](../contrib/discover/hc-discover.py)
-finds agent CLIs outside hc (in tmux, as services), Hermes gateways and
-sandboxes, Antigravity and other agent IDEs, and model servers in systemd or
-Docker. hc only relays what it prints: what to look for is the script's
+is an example: it finds agent CLIs outside hc (in tmux, as services), desktop
+agent apps and IDEs, and model servers in systemd or Docker. hc only relays what it prints: what to look for is the script's
 business, and found entries are for looking, not driving.
 
 ## When something goes wrong

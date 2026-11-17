@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
 """What runs on this machine outside hc, as `hc ls --found` wants it.
 
-hc runs this (config: discover = ["~/.config/herdr-core/hc-discover.py"]) and
-relays what it prints: a JSON array of {kind, name, status, pid, cwd, detail}.
-Everything vendor-specific lives here, not in hc. Stdlib only; Linux and macOS.
-Edit the tables below to taste.
+Install it on each machine whose outside-hc agents you want listed:
+
+    mkdir -p ~/.config/herdr-core
+    cp hc-discover.py ~/.config/herdr-core/ && chmod +x ~/.config/herdr-core/hc-discover.py
+    # ~/.config/herdr-core/config.toml
+    discover = ["~/.config/herdr-core/hc-discover.py"]
+
+hc runs it and relays what it prints within 5 s: a JSON array of
+{kind, name, status, pid, cwd, detail}. Try it by hand: it should print one
+line of JSON. Everything vendor-specific lives here, not in hc. Stdlib only;
+Linux and macOS (cwd and systemd units are Linux-only).
+
+It finds agent CLIs running outside hc (in tmux, as services), desktop agent
+apps and IDEs, and matching systemd units and Docker containers. Edit the
+tables below to taste: what to look for is yours to decide.
 """
 import json, os, platform, re, shutil, subprocess
 
@@ -19,11 +30,9 @@ HELPERS = ("bg-pty-host", "bg-spare", "daemon run", "shell-snapshots", "--chrome
 # Desktop and IDE agents: a substring of the command line.
 APPS = {"antigravity": "antigravity", "Cursor.app": "cursor-ide", "Windsurf": "windsurf", "Claude.app": "claude-desktop"}
 # systemd units and containers worth listing: a pattern, and the kind.
-UNITS = [(r"^hermes-gateway-(.+)\.service$", "hermes"), (r"^(hermes-.+)\.service$", "hermes"),
-         (r"^(claude.*)\.service$", "claude-code"), (r"^(paperclip.*)\.service$", "paperclip"),
-         (r"^(ollama|vllm.*|litellm.*)\.service$", "model-server")]
-CONTAINERS = [(r"hermes", "hermes"), (r"claude-os|claude", "claude-os"), (r"^vllm|litellm|ollama|lifeboat|open-webui", "model-server"),
-              (r"n8n", "automation"), (r"agent", "agent")]
+UNITS = [(r"^hermes-gateway-(.+)\.service$", "hermes"), (r"^(claude.*|codex.*|aider.*)\.service$", "agent"),
+         (r"^(ollama|vllm.*|litellm.*|llama.*)\.service$", "model-server")]
+CONTAINERS = [(r"^vllm|litellm|ollama|llama|open-webui", "model-server"), (r"n8n", "automation"), (r"agent", "agent")]
 
 
 def sh(*cmd, timeout=3):
