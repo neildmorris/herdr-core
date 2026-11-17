@@ -3,6 +3,8 @@
 # Linux uses static musl for compatibility with older distros.
 # Upload versioned files first, core/latest.json last, so nobody sees a
 # version whose files aren't up yet.
+# Upstream's only: forks (which lack its secrets and R2 bucket) skip every
+# job and release with fork-release.yml instead.
 name: release
 
 on:
@@ -25,6 +27,7 @@ env:
 
 jobs:
   build:
+    if: github.repository == 'herdrdev/herdr-core'
     strategy:
       fail-fast: true
       matrix:
@@ -136,7 +139,8 @@ jobs:
   sign-windows:
     needs: build
     if: >-
-      github.triggering_actor == 'ogulcancelik' && vars.AZURE_SIGNING_PROFILE != ''
+      github.repository == 'herdrdev/herdr-core'
+      && github.triggering_actor == 'ogulcancelik' && vars.AZURE_SIGNING_PROFILE != ''
       && ((github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch')
     environment: signing
     runs-on: windows-2025
@@ -192,7 +196,8 @@ jobs:
     # old tag's run, which would point latest.json back at that version.
     # sign-windows may be skipped, not failed.
     if: >-
-      !cancelled() && needs.build.result == 'success' && needs.sign-windows.result != 'failure'
+      github.repository == 'herdrdev/herdr-core'
+      && !cancelled() && needs.build.result == 'success' && needs.sign-windows.result != 'failure'
       && github.event_name == 'push' && github.ref_type == 'tag' && github.triggering_actor == 'ogulcancelik'
     # The R2 keys live here, usable only from v* tags.
     environment: release
