@@ -110,6 +110,11 @@ pub struct HelloParams {
     /// Features supported by a core dialing in, including relaying size notifications.
     #[serde(default)]
     pub features: Vec<String>,
+    /// The core dialing in is a mesh hub for this one: calls naming it, or a
+    /// machine this core doesn't know, may go to it, and its terminals and
+    /// machines are listed here.
+    #[serde(default)]
+    pub mesh: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -327,6 +332,45 @@ pub struct ListParams {
     #[serde(default, with = "label_map")]
     #[schemars(with = "BTreeMap<String, String>")]
     pub labels: Vec<Label>,
+    /// Also agents found running outside hc on every machine, by each
+    /// machine's own `discover` command (see config).
+    #[arg(long)]
+    #[serde(default)]
+    pub found: bool,
+}
+
+/// Something running outside hc that a machine's `discover` command reported
+/// (a service, an editor, an agent in another terminal). hc only relays it.
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+pub struct Found {
+    /// Where it runs, as the caller names machines: empty for here.
+    #[serde(default)]
+    pub machine: String,
+    /// What it is: `claude-code`, `hermes`, `antigravity`... (the script's word).
+    pub kind: String,
+    /// Which one.
+    #[serde(default)]
+    pub name: String,
+    /// Its state in the script's words (`running`, `active`, `idle`...).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    /// Anything else worth a glance (a unit, a container, a model).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// A machine reached through a mesh hub, as the hub sees its line.
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+pub struct MeshMachine {
+    pub name: String,
+    pub state: String,
+    /// The hub it is reached through (the hub itself: null).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -339,6 +383,12 @@ pub struct ListResult {
     /// Machines added here and their lines: one that is not connected is
     /// listed here, not waited on.
     pub machines: Vec<crate::remote::MachineView>,
+    /// Mesh hubs this core may use, and the machines reached through them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mesh: Vec<MeshMachine>,
+    /// With `found`: what runs outside hc, on every machine that answered.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub found: Vec<Found>,
 }
 
 #[derive(clap::Args, Serialize, Deserialize, JsonSchema)]
@@ -823,6 +873,20 @@ pub struct MachineAddParams {
     /// The hc session on that machine (default: its default).
     #[arg(long)]
     pub session: Option<String>,
+    /// Let it use this core as its mesh hub (see `hc machine mesh`).
+    #[arg(long)]
+    #[serde(default)]
+    pub mesh: bool,
+}
+
+#[derive(clap::Args, Serialize, Deserialize, JsonSchema)]
+pub struct MachineMeshParams {
+    /// The machine's name.
+    pub machine: String,
+    /// Take it out of the mesh: it reaches only terminals that started its work.
+    #[arg(long)]
+    #[serde(default)]
+    pub off: bool,
 }
 
 #[derive(clap::Args, Serialize, Deserialize, JsonSchema)]

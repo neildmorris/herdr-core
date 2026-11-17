@@ -226,6 +226,18 @@ text rewriting needed: only the edit travels.
 Remote paths start at that machine's home unless you set `--cwd`; local
 paths start at your current folder. Prefer explicit paths for remote work.
 
+### The mesh
+
+On a machine its hub added with `hc machine mesh <name>`, `hc ls` also lists
+the hub's terminals (`<hub>/t7`) and every machine the hub reaches
+(`box/t3`), and those addresses work here as they do on the hub: read, send,
+keys, wait, get, kill, and `run`/`exec`/`file --on box`. Attach, events and
+put do not cross the hub yet: attach from the hub itself. `ls` shows `mesh`
+(the hub and its machines). `hc ls --found` adds what each machine's
+`discover` command reports running outside hc (services, editors, agents in
+tmux): look, but drive only hc terminals. Without the mesh, an added machine
+reaches only the terminals that started its work.
+
 ## Status, recovery, and cleanup
 
 - State is `live` or `finished`. Status comes from the program's OSC 7501

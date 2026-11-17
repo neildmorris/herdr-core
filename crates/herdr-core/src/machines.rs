@@ -38,6 +38,11 @@ pub struct Machine {
     /// Remote account for loginctl enable-linger, when applicable.
     #[serde(default)]
     pub logout_linger_user: Option<String>,
+    /// Mesh: it may use this core as its hub, seeing and driving every
+    /// terminal here and on the other machines added here (`hc machine mesh`).
+    /// Off: it reaches only the terminals here that started work there.
+    #[serde(default)]
+    pub mesh: bool,
 }
 
 impl Machine {

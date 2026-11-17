@@ -24,16 +24,19 @@ pub const FEATURES: &[&str] = &[
     "automatic_input",
     "restart_environment",
     "put_chunks",
+    "mesh",
 ];
 pub const FINISHED_LINES: usize = 1000;
 /// Terminal identity variables replaced by the core's defaults unless explicitly overridden.
 pub const IDENTITY_VARS: &[&str] = &["TERM", "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "COLORTERM"];
 
 mod doc;
+mod mesh;
 mod put;
 mod run;
 mod types;
 use doc::*;
+use mesh::*;
 use put::*;
 pub use put::{begin_read, forget_puts};
 mod waiting;
@@ -168,6 +171,9 @@ methods! { Ctx<'_>;
     "machine.rename" => machine_rename, MachineRenameParams => crate::machines::Machine,
         "Give a machine a new name here. Only this core's name for it changes.",
         errors ["invalid_params", "name_taken", "machine_unknown"];
+    "machine.mesh" => machine_mesh, MachineMeshParams => crate::machines::Machine,
+        "Let a machine use this core as its mesh hub (or not, with `off`): from there, list and drive every terminal here and on the other machines added here. It redials to hear.",
+        errors ["machine_unknown"];
     "machine.rm" => machine_rm, MachineParams => RemoveResult,
         "Forget a machine. Its terminals keep running there.",
         errors ["machine_unknown"];
@@ -303,18 +309,38 @@ async fn terminal_list(core: Ctx<'_>, p: ListParams) -> Result<ListResult, RpcEr
             })
         })
         .collect();
-    for ask in asks {
+    // Mesh hubs (never asked from afar: a hub asking back would loop), and
+    // what runs outside hc here, alongside.
+    let hubs = (!afar).then(|| {
+        tokio::spawn({
+            let (core, p) = (core.core.clone(), ListParams { all: p.all, labels: p.labels.clone(), found: p.found });
+            async move { from_hubs(&core, &p).await }
+        })
+    });
+    let mut found = if p.found { discover_found(core).await } else { Vec::new() };
+    for (m, ask) in machines.iter().zip(asks) {
         if let Ok(Some(r)) = ask.await {
             terminals.extend(r["terminals"].as_array().cloned().unwrap_or_default());
             hidden_finished += r["hidden_finished"].as_u64().unwrap_or(0) as usize;
+            found.extend(found_on(&m.name, &r["found"]));
         }
+    }
+    let mut mesh = Vec::new();
+    if let Some(Ok(h)) = match hubs {
+        Some(h) => Some(h.await),
+        None => None,
+    } {
+        terminals.extend(h.terminals);
+        hidden_finished += h.hidden_finished;
+        found.extend(h.found);
+        mesh = h.mesh;
     }
     let machines = {
         let st = core.lock();
         machines.iter().map(|m| crate::remote::view(&st, m)).collect()
     };
     core.flush_saved().await?;
-    Ok(ListResult { terminals, hidden_finished, machines })
+    Ok(ListResult { terminals, hidden_finished, machines, mesh, found })
 }
 
 async fn terminal_get(core: Ctx<'_>, p: TerminalParams) -> Result<Public, RpcError> {
@@ -662,6 +688,7 @@ async fn machine_add(core: Ctx<'_>, p: MachineAddParams) -> Result<crate::machin
         version: hello["version"].as_str().unwrap_or_default().into(),
         keeps_running_after_logout: hello["keeps_running_after_logout"].as_bool(),
         logout_linger_user: hello["logout_linger_user"].as_str().map(String::from),
+        mesh: p.mesh,
     };
     if machine.id == core.info.id {
         return Err(RpcError::invalid_params(format!("{} is this core", machine.target))

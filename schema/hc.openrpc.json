@@ -306,6 +306,57 @@
         ],
         "type": "object"
       },
+      "Found": {
+        "description": "Something running outside hc that a machine's `discover` command reported\n(a service, an editor, an agent in another terminal). hc only relays it.",
+        "properties": {
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "description": "Anything else worth a glance (a unit, a container, a model).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "description": "What it is: `claude-code`, `hermes`, `antigravity`... (the script's word).",
+            "type": "string"
+          },
+          "machine": {
+            "default": "",
+            "description": "Where it runs, as the caller names machines: empty for here.",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "description": "Which one.",
+            "type": "string"
+          },
+          "pid": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "Its state in the script's words (`running`, `active`, `idle`...).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
       "HelloResult": {
         "properties": {
           "core": {
@@ -467,6 +518,13 @@
       },
       "ListResult": {
         "properties": {
+          "found": {
+            "description": "With `found`: what runs outside hc, on every machine that answered.",
+            "items": {
+              "$ref": "#/components/schemas/Found"
+            },
+            "type": "array"
+          },
           "hidden_finished": {
             "description": "Finished terminals left out (see `all`).",
             "format": "uint",
@@ -477,6 +535,13 @@
             "description": "Machines added here and their lines: one that is not connected is\nlisted here, not waited on.",
             "items": {
               "$ref": "#/components/schemas/MachineView"
+            },
+            "type": "array"
+          },
+          "mesh": {
+            "description": "Mesh hubs this core may use, and the machines reached through them.",
+            "items": {
+              "$ref": "#/components/schemas/MeshMachine"
             },
             "type": "array"
           },
@@ -491,7 +556,9 @@
         "required": [
           "terminals",
           "hidden_finished",
-          "machines"
+          "machines",
+          "mesh",
+          "found"
         ],
         "type": "object"
       },
@@ -547,6 +614,11 @@
               "string",
               "null"
             ]
+          },
+          "mesh": {
+            "default": false,
+            "description": "Mesh: it may use this core as its hub, seeing and driving every\nterminal here and on the other machines added here (`hc machine mesh`).\nOff: it reaches only the terminals here that started work there.",
+            "type": "boolean"
           },
           "name": {
             "description": "What this core calls it: `rohan` in `rohan/t7`.",
@@ -628,6 +700,11 @@
               "null"
             ]
           },
+          "mesh": {
+            "default": false,
+            "description": "Mesh: it may use this core as its hub, seeing and driving every\nterminal here and on the other machines added here (`hc machine mesh`).\nOff: it reaches only the terminals here that started work there.",
+            "type": "boolean"
+          },
           "name": {
             "description": "What this core calls it: `rohan` in `rohan/t7`.",
             "type": "string"
@@ -683,6 +760,29 @@
           "id",
           "host",
           "version",
+          "state"
+        ],
+        "type": "object"
+      },
+      "MeshMachine": {
+        "description": "A machine reached through a mesh hub, as the hub sees its line.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "via": {
+            "description": "The hub it is reached through (the hub itself: null).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
           "state"
         ],
         "type": "object"
@@ -1641,6 +1741,16 @@
               "null"
             ]
           }
+        },
+        {
+          "description": "The core dialing in is a mesh hub for this one: calls naming it, or a\nmachine this core doesn't know, may go to it, and its terminals and\nmachines are listed here.",
+          "name": "mesh",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "The core dialing in is a mesh hub for this one: calls naming it, or a\nmachine this core doesn't know, may go to it, and its terminals and\nmachines are listed here.",
+            "type": "boolean"
+          }
         }
       ],
       "result": {
@@ -2036,6 +2146,16 @@
           "schema": {
             "default": false,
             "description": "Include finished terminals.",
+            "type": "boolean"
+          }
+        },
+        {
+          "description": "Also agents found running outside hc on every machine, by each\nmachine's own `discover` command (see config).",
+          "name": "found",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Also agents found running outside hc on every machine, by each\nmachine's own `discover` command (see config).",
             "type": "boolean"
           }
         },
@@ -4019,6 +4139,16 @@
       "paramStructure": "by-name",
       "params": [
         {
+          "description": "Let it use this core as its mesh hub (see `hc machine mesh`).",
+          "name": "mesh",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Let it use this core as its mesh hub (see `hc machine mesh`).",
+            "type": "boolean"
+          }
+        },
+        {
           "description": "What to call it here (default: the target's host).",
           "name": "name",
           "required": false,
@@ -4172,6 +4302,47 @@
           "schema": {
             "description": "Its new name. Addresses with the old one stop working.",
             "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "result",
+        "schema": {
+          "$ref": "#/components/schemas/Machine"
+        }
+      }
+    },
+    {
+      "description": "Let a machine use this core as its mesh hub (or not, with `off`): from there, list and drive every terminal here and on the other machines added here. It redials to hear.",
+      "errors": [
+        {
+          "code": -32000,
+          "data": {
+            "kind": "machine_unknown"
+          },
+          "message": "machine_unknown"
+        }
+      ],
+      "name": "machine.mesh",
+      "paramStructure": "by-name",
+      "params": [
+        {
+          "description": "The machine's name.",
+          "name": "machine",
+          "required": true,
+          "schema": {
+            "description": "The machine's name.",
+            "type": "string"
+          }
+        },
+        {
+          "description": "Take it out of the mesh: it reaches only terminals that started its work.",
+          "name": "off",
+          "required": false,
+          "schema": {
+            "default": false,
+            "description": "Take it out of the mesh: it reaches only terminals that started its work.",
+            "type": "boolean"
           }
         }
       ],

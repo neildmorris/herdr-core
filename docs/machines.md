@@ -153,6 +153,51 @@ It travels in small pieces, so typing and other calls to that machine keep going
 and it takes as long as the link needs. A machine with an hc older than this one gets the file in one piece,
 which holds up everything else on its connection and gives up after `machine_timeout`.
 
+## The mesh: every machine from any machine
+
+By default a machine you add reaches back only to the terminals here that
+started work there. Put it in the mesh to let it use this core as its hub:
+
+```sh
+hc machine mesh spark          # or: hc machine add spark --mesh
+hc machine mesh spark --off    # back to the default
+```
+
+The machine hears at its next hello (hc dials it again at once). From there:
+
+```sh
+hc ls                          # its own, the hub's (neil/t7), and the hub's machines' (ops/t3)
+hc read ops/t3 --lines 100     # through the hub; no ssh from spark to ops needed
+hc send neil/t7 "review the diff on ops"
+hc run --bg --on ops --cwd /srv/app cargo test
+```
+
+Calls go over the line the hub already keeps, so the machine needs no ssh
+access of its own and the hub need not be reachable from it. Addresses this
+machine doesn't know go to its hub, which answers `machine_unknown` for ones
+it doesn't know either. Attach, events and put stay on the hub for now. A mesh
+machine cannot add, remove or rename the hub's machines or stop its core.
+
+The mesh is trust: a machine in it can type into every terminal the hub
+reaches. Leave out machines that belong to someone else.
+
+### What runs outside hc
+
+`hc ls --found` also asks each machine's `discover` command what runs there
+outside hc, and lists it under the machine's name:
+
+```toml
+# ~/.config/herdr-core/config.toml
+discover = ["~/.config/herdr-core/hc-discover.py"]
+```
+
+The command prints a JSON array of `{kind, name, status, pid, cwd, detail}`
+within 5 s. [`contrib/discover/hc-discover.py`](../contrib/discover/hc-discover.py)
+finds agent CLIs outside hc (in tmux, as services), Hermes gateways and
+sandboxes, Antigravity and other agent IDEs, and model servers in systemd or
+Docker. hc only relays what it prints: what to look for is the script's
+business, and found entries are for looking, not driving.
+
 ## When something goes wrong
 
 - Check `hc machine ls` first. It shows the connection state and the last observed hc version.

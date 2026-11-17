@@ -35,6 +35,10 @@ pub struct Config {
     /// timeout on top), and to send anything at all before its line is
     /// given up and dialed again (default 30).
     pub machine_timeout: Option<f64>,
+    /// A program and its arguments that print, as JSON, what runs here
+    /// outside hc: an array of `{kind, name, status, pid, cwd, detail}`.
+    /// `hc ls --found` runs it on every machine (5 s at most).
+    pub discover: Option<Vec<String>>,
 }
 
 fn seconds<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Duration>, D::Error> {

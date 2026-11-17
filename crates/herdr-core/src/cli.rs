@@ -424,6 +424,11 @@ fn run(cmd: Option<Cmd>, json: bool, asked: bool) -> Result<Option<Out>, RpcErro
                 };
                 json["machines"] = machines.iter().map(keep).collect();
             }
+            for key in ["mesh", "found"] {
+                if r[key].as_array().is_some_and(|a| !a.is_empty()) {
+                    json[key] = r[key].clone();
+                }
+            }
             Out { json, human }
         }
         Cmd::Get(mut p) => {
@@ -826,6 +831,7 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("machine ls", "machine.list"),
     ("machine login", "machine.connect"),
     ("machine rename", "machine.rename"),
+    ("machine mesh", "machine.mesh"),
     ("machine rm", "machine.rm"),
 ];
 /// Methods without a command: handshake, opaque document storage, and the

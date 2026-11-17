@@ -222,6 +222,26 @@ pub(super) fn table(r: &Value) -> String {
     for m in r["machines"].as_array().into_iter().flatten().filter(|m| m["state"] != "connected") {
         out.push_str(&format!("{}: {}\n", m["name"].as_str().unwrap_or("?"), line_state(m)));
     }
+    for m in r["mesh"].as_array().into_iter().flatten().filter(|m| m["state"] != "connected") {
+        let via = m["via"].as_str().map(|v| format!(" (via {v})")).unwrap_or_default();
+        out.push_str(&format!("{}: {}{via}\n", m["name"].as_str().unwrap_or("?"), m["state"].as_str().unwrap_or("?")));
+    }
+    let found = r["found"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if !found.is_empty() {
+        out.push_str("\x1b[2mfound outside hc\x1b[22m\n");
+    }
+    for f in found {
+        let s = |k: &str| f[k].as_str().unwrap_or_default();
+        let at = if s("machine").is_empty() { "here".to_string() } else { s("machine").to_string() };
+        let pid = f["pid"].as_u64().map(|p| format!(" pid {p}")).unwrap_or_default();
+        let rest = [s("cwd"), s("detail")].into_iter().filter(|x| !x.is_empty()).collect::<Vec<_>>().join(" \u{b7} ");
+        out.push_str(&format!(
+            "{at:<12} {:<14} {:<22} {:<9}{pid}  \x1b[2m{rest}\x1b[22m\n",
+            s("kind"),
+            s("name"),
+            s("status")
+        ));
+    }
     match r["hidden_finished"].as_u64() {
         Some(n) if n > 0 => out.push_str(&format!("{n} finished hidden (--all)")),
         _ => {

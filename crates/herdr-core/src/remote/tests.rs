@@ -136,6 +136,7 @@ async fn automatic_input_survives_relays_but_not_a_capability_downgrade() {
             version: "test".into(),
             keeps_running_after_logout: None,
             logout_linger_user: None,
+            mesh: false,
         };
         let conn = Arc::new(Conn::default());
         conn.with(|out| out.open(7));
@@ -249,6 +250,7 @@ async fn failed_reattach_drains_pending_data_before_close() {
         version: "test".into(),
         keeps_running_after_logout: None,
         logout_linger_user: None,
+        mesh: false,
     };
     let conn = Arc::new(Conn::default());
     conn.with(|out| {
@@ -321,6 +323,7 @@ fn remote_misses_and_renames_keep_subscribers_on_the_current_machine() {
         version: "test".into(),
         keeps_running_after_logout: None,
         logout_linger_user: None,
+        mesh: false,
     };
     let (tx, mut rx) = mpsc::channel(4);
     let (filtered_tx, mut filtered_rx) = mpsc::channel(4);

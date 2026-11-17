@@ -23,9 +23,12 @@ type Sink = (Arc<Conn>, u32);
 /// A pending reply, its stream sink and whether resize support is required.
 type Waiting = (oneshot::Sender<Value>, Option<(Sink, bool)>);
 
+mod mesh;
 mod put;
 mod run;
 mod viewers;
+pub use mesh::hubs;
+use mesh::{NOT_OVER_MESH, from_mesh, hub, is_mesh_peer};
 use run::forward_once;
 #[cfg(test)]
 use viewers::automatic_input;
@@ -56,7 +59,7 @@ pub struct Line {
     /// Puts in pieces take turns on it.
     bulk: put::Lane,
     /// Given up though it still hears from there (`remote/put.rs`): dialed again.
-    pub(super) retired: tokio::sync::Notify,
+    pub(crate) retired: tokio::sync::Notify,
 }
 
 impl Line {
@@ -292,7 +295,7 @@ async fn supervise(core: Arc<Core>, id: String) {
             st.lines.insert(id.clone(), state);
             core.changed.notify_waiters();
         };
-        let hello = json!({"framed": true, "core": core.info, "calls_you": m.name, "features": crate::api::FEATURES});
+        let hello = json!({"framed": true, "core": core.info, "calls_you": m.name, "features": crate::api::FEATURES, "mesh": m.mesh});
         match crate::machines::dial(&core.paths, m.reach(), m.session.as_deref(), hello).await {
             Ok(d) if d.hello["core"]["id"] != m.id.as_str() => {
                 down(&mut core.lock(), format!("a different core answers there ({})", d.hello["core"]["id"]));
@@ -619,6 +622,7 @@ async fn from_machine(core: Arc<Core>, m: Machine, line: Arc<Line>, message: Val
         return;
     }
     let result = match parent.filter(|_| CALLS_BACK.contains(&method)) {
+        None if m.mesh => from_mesh(&core, &m, method, params).await,
         None => Err(RpcError::new(
             "denied",
             format!("{} may only reach the terminals here that started its own", m.name),
@@ -648,6 +652,9 @@ pub struct Peer {
     /// What it must hear and couldn't yet (notes for its terminals), oldest first.
     #[serde(default)]
     pub outbox: Vec<Value>,
+    /// It is a mesh hub for this core (it said so when it dialed in).
+    #[serde(default)]
+    pub mesh: bool,
 }
 
 fn save_peers(core: &Core, st: &State) {
@@ -678,6 +685,7 @@ pub fn peer_joined(core: &Arc<Core>, conn: &Arc<Conn>, hello: &Value) {
     let peer = st.peers.entry(id.into()).or_default();
     peer.name = if taken { id.into() } else { name };
     peer.calls_me = hello["calls_you"].as_str().unwrap_or(&core.info.name).into();
+    peer.mesh = hello["mesh"] == true;
     for message in std::mem::take(&mut peer.outbox) {
         line.message(&message);
     }
@@ -821,8 +829,12 @@ const ON_A_TERMINAL: &[&str] = &[
 pub enum To {
     /// A machine this core added.
     Machine(Machine),
-    /// A core that dialed in: only to the parents of its terminals here.
+    /// A core that dialed in: only to the parents of its terminals here,
+    /// unless it is a mesh hub.
     Peer { id: String, name: String },
+    /// A machine this core doesn't know, through the mesh hub `name`, which
+    /// gets the address whole.
+    Relay { id: String, name: String },
 }
 
 /// What an address prefix names: this core (`None`), a machine, or a peer.
@@ -835,7 +847,10 @@ fn named(core: &Core, st: &State, prefix: &str) -> Result<Option<To>, RpcError> 
     }
     match st.peers.iter().find(|(id, p)| *id == prefix || p.name == prefix) {
         Some((id, p)) => Ok(Some(To::Peer { id: id.clone(), name: p.name.clone() })),
-        None => Err(crate::machines::unknown(&st.machines, prefix)),
+        None => match hub(st) {
+            Some((id, name)) => Ok(Some(To::Relay { id, name })),
+            None => Err(crate::machines::unknown(&st.machines, prefix)),
+        },
     }
 }
 
@@ -851,7 +866,12 @@ pub fn route(core: &Core, method: &str, params: &Value) -> Result<Option<(To, Va
         let Some(on) = params["on"].as_str().map(String::from) else { return Ok(None) };
         params.as_object_mut().map(|p| p.remove("on"));
         match named(core, &st, &on)? {
+            Some(hub @ To::Peer { .. }) if matches!(&hub, To::Peer { id, .. } if is_mesh_peer(&st, id)) => Some(hub),
             Some(To::Peer { name, .. }) => return Err(crate::machines::unknown(&st.machines, &name)),
+            Some(relay @ To::Relay { .. }) => {
+                params["on"] = on.into(); // the hub picks the machine
+                Some(relay)
+            }
             to => to,
         }
     } else if ON_A_TERMINAL.contains(&method) && params["children"].is_null() {
@@ -861,12 +881,28 @@ pub fn route(core: &Core, method: &str, params: &Value) -> Result<Option<(To, Va
             return Ok(None);
         };
         let to = named(core, &st, &prefix)?;
-        if let Some(To::Peer { name, .. }) = &to
-            && !CALLS_BACK.contains(&method)
-        {
-            return Err(RpcError::new("denied", format!("{name} only takes send, read, get and wait from here"), ""));
+        match &to {
+            Some(To::Peer { id, name } | To::Relay { id, name })
+                if is_mesh_peer(&st, id) && NOT_OVER_MESH.contains(&method) =>
+            {
+                return Err(RpcError::new(
+                    "denied",
+                    format!("{method} doesn't go through the mesh hub {name} yet"),
+                    "read, send, keys, wait, get and kill do; attach on the hub itself",
+                ));
+            }
+            Some(To::Peer { id, name }) if !is_mesh_peer(&st, id) && !CALLS_BACK.contains(&method) => {
+                return Err(RpcError::new(
+                    "denied",
+                    format!("{name} only takes send, read, get and wait from here"),
+                    "",
+                ));
+            }
+            _ => {}
         }
-        params["terminal"] = local.into();
+        if !matches!(to, Some(To::Relay { .. })) {
+            params["terminal"] = local.into();
+        }
         to
     } else {
         None
@@ -1027,7 +1063,7 @@ pub async fn forward(core: &Core, m: &Machine, method: &str, params: Value) -> R
 pub async fn forward_to(core: &Core, to: &To, method: &str, params: Value) -> Result<Value, RpcError> {
     match to {
         To::Machine(m) => forward(core, m, method, params).await,
-        To::Peer { id, name } => {
+        To::Peer { id, name } | To::Relay { id, name } => {
             let found = core.lock().peer_lines.get(id).map(|(_, l)| l.clone());
             let line = found
                 .ok_or_else(|| RpcError::new("unavailable", format!("{name} is not connected"), "try again later"))?;

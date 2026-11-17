@@ -315,6 +315,7 @@ Options:
       --all          Include finished terminals
       --json         JSON output even in a terminal
       --label <K=V>  Only terminals carrying all of these labels (repeatable)
+      --found        Also agents found running outside hc on every machine, by each machine's own `discover` command (see config)
   -h, --help         Print help
 ```
 
@@ -331,6 +332,7 @@ Commands:
   login   Log in again (a password or code) after the machine says it needs one. On Windows: reconnect once its SSH keys work
   update  Copy this hc there and restart hc there (its terminals keep running)
   rename  Give a machine a new name here
+  mesh    Let a machine use this core as its hub: from there, see and drive every terminal here and on the other machines added here (--off undoes it)
   rm      Forget a machine (its terminals keep running there)
   help    Print this message or the help of the given subcommand(s)
 
@@ -356,6 +358,7 @@ Options:
       --install            Copy this hc there when it has none or one too old, without asking (for scripts; in a terminal you are asked)
       --name <NAME>        What to call it here (default: the target's host)
       --session <SESSION>  The hc session on that machine (default: its default)
+      --mesh               Let it use this core as its mesh hub (see `hc machine mesh`)
   -h, --help               Print help
 ```
 
@@ -383,6 +386,22 @@ Usage: hc machine ls [OPTIONS]
 
 Options:
       --json  JSON output even in a terminal
+  -h, --help  Print help
+```
+
+## hc machine mesh
+
+```text
+Let a machine use this core as its hub: from there, see and drive every terminal here and on the other machines added here (--off undoes it)
+
+Usage: hc machine mesh [OPTIONS] <MACHINE>
+
+Arguments:
+  <MACHINE>  The machine's name
+
+Options:
+      --json  JSON output even in a terminal
+      --off   Take it out of the mesh: it reaches only terminals that started its work
   -h, --help  Print help
 ```
 

@@ -1,7 +1,7 @@
 //! `hc machine …`: adding, listing, logging in to, updating other machines.
 
 use super::*;
-use crate::api::{MachineAddParams, MachineParams, MachineRenameParams};
+use crate::api::{MachineAddParams, MachineMeshParams, MachineParams, MachineRenameParams};
 
 #[derive(Subcommand)]
 pub(super) enum MachineCmd {
@@ -16,6 +16,9 @@ pub(super) enum MachineCmd {
     Update(MachineParams),
     /// Give a machine a new name here.
     Rename(MachineRenameParams),
+    /// Let a machine use this core as its hub: from there, see and drive every
+    /// terminal here and on the other machines added here (--off undoes it).
+    Mesh(MachineMeshParams),
     /// Forget a machine (its terminals keep running there).
     Rm(MachineParams),
 }
@@ -141,6 +144,20 @@ pub(super) fn machine(
         MachineCmd::Rename(p) => {
             let m = call("machine.rename", to(&p))?;
             let human = format!("{} is now {}", p.machine, s(&m["name"]));
+            Out { json: m, human }
+        }
+        MachineCmd::Mesh(p) => {
+            let m = call("machine.mesh", to(&p))?;
+            let human = match m["mesh"] == true {
+                true => format!(
+                    "{0} is in the mesh: from {0}, hc ls shows every machine here and its calls reach them",
+                    s(&m["name"])
+                ),
+                false => format!(
+                    "{} is out of the mesh: it reaches only terminals here that started its work",
+                    s(&m["name"])
+                ),
+            };
             Out { json: m, human }
         }
         MachineCmd::Rm(p) => {
