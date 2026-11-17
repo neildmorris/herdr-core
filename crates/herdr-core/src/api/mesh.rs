@@ -61,9 +61,6 @@ pub(super) async fn from_hubs(core: &Arc<Core>, p: &ListParams) -> FromHubs {
         })
         .collect();
     for (hub_id, hub, ask) in asks {
-        if seen.contains(&hub_id) {
-            continue; // added here too, or reached through an earlier hub
-        }
         let Ok(Ok(Ok(r))) = ask.await else {
             out.mesh.push(MeshMachine { name: hub, state: "unreachable".into(), via: None });
             continue;
@@ -90,7 +87,10 @@ pub(super) async fn from_hubs(core: &Arc<Core>, p: &ListParams) -> FromHubs {
         );
         out.hidden_finished += r["hidden_finished"].as_u64().unwrap_or(0) as usize;
         out.found.extend(found_on(&hub, &r["found"]).into_iter().filter(|f| fresh(&f.machine)));
-        out.mesh.push(MeshMachine { name: hub.clone(), state: "connected".into(), via: None });
+        // A hub added here too is already a machine here: only what it reaches is news.
+        if !seen.contains(&hub_id) {
+            out.mesh.push(MeshMachine { name: hub.clone(), state: "connected".into(), via: None });
+        }
         for m in r["machines"].as_array().into_iter().flatten() {
             let (name, state) = (m["name"].as_str().unwrap_or_default(), m["state"].as_str().unwrap_or_default());
             if fresh(name) && name != hub {

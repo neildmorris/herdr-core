@@ -130,3 +130,25 @@ fn two_hubs_for_each_other_list_every_core_once_and_promptly() {
         assert_eq!(seen.len(), 3, "{who} lists each core once: {seen:?}");
     }
 }
+
+#[test]
+fn a_hub_also_added_as_a_machine_still_brings_what_it_reaches() {
+    let ops = Session::new();
+    let mut spark = Session::new();
+    let mut hub = Session::new();
+    spark.env.push(fake_ssh(&spark, &[("mainhub", &hub)]));
+    spark.env.push(("HC_RECONNECT_MS".into(), "200".into()));
+    spark.json(&["server", "status"]);
+    hub.env.push(fake_ssh(&hub, &[("spark", &spark), ("ops", &ops)]));
+    hub.env.push(("HC_RECONNECT_MS".into(), "200".into()));
+    hub.json(&["machine", "add", "spark", "--mesh"]);
+    hub.json(&["machine", "add", "ops"]);
+    // spark adds its hub as a machine too, but never ops: ops comes only through the hub.
+    spark.json(&["machine", "add", "mainhub", "--name", "mac", "--mesh"]);
+    let on_ops = run(&ops, &["--name", "o", "sh"]);
+    let on_hub = run(&hub, &["--name", "h", "sh"]);
+    wait_until("spark sees ops through its hub", || addresses(&spark.json(&["ls"])).contains(&format!("ops/{on_ops}")));
+    let seen = addresses(&spark.json(&["ls"]));
+    assert!(seen.contains(&format!("mac/{on_hub}")), "the hub once, by its machine name: {seen:?}");
+    assert_eq!(seen.len(), 2, "{seen:?}");
+}
